@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liftjudge"
+version = "0.1.0"
+description = "Judge powerlifting technique (squat, bench, deadlift) from video against IPF rules"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Abdulaziz Abdulhadi" }]
+license = { text = "AGPL-3.0" }
+dependencies = ["numpy", "pandas", "scipy", "opencv-python", "ultralytics>=8.4", "lap>=0.5.12", "imageio-ffmpeg"]
+
+[project.optional-dependencies]
+dl = ["keras>=3"]
+app = ["streamlit>=1.40", "matplotlib"]
+api = ["fastapi>=0.110", "uvicorn[standard]", "python-multipart", "keras>=3"]
+dev = ["pytest", "jupyter", "matplotlib", "seaborn", "scikit-learn", "keras>=3", "streamlit>=1.40", "fastapi>=0.110", "uvicorn", "python-multipart", "httpx"]
+
+[project.scripts]
+liftjudge = "liftjudge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
