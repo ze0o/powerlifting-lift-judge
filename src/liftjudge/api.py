@@ -26,6 +26,7 @@ from .rules import SquatConfig
 
 try:
     from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import FileResponse
 except ImportError as e:  # pragma: no cover
     raise ImportError("The API needs: pip install -e \".[api]\"") from e
@@ -36,6 +37,9 @@ DL_PATH = Path(os.environ.get("LIFTJUDGE_DL_MODEL", ROOT / "models" / "rep_fault
 MAX_MB = 300
 
 app = FastAPI(title="Powerlifting Lift Judge", version=__version__)
+# The Flutter web app runs on another localhost port, so the browser needs CORS.
+# Development server on your own network: any origin is fine. Lock this down if you ever host it.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
 _dl = {"model": None, "tried": False}
 
 

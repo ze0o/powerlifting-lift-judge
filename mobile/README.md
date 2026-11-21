@@ -36,8 +36,15 @@ flutter test
 flutter run
 ```
 
-**3. In the app:** Settings → server `http://192.168.1.20:8000` → *Test connection*.
-On the Android emulator the PC is `http://10.0.2.2:8000` (the default).
+**3. In the app:** Settings → server address → *Test connection*:
+
+| Running the app in | Server address |
+|---|---|
+| Chrome (`flutter run -d chrome`) | `http://localhost:8000` (default on web) |
+| Android emulator | `http://10.0.2.2:8000` (default on Android) |
+| A real phone | your PC's Wi-Fi address, e.g. `http://192.168.1.20:8000` |
+
+In Chrome there's no camera button: use *Choose a video* to pick a file from your computer.
 
 ## Structure
 

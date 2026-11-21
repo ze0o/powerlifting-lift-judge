@@ -80,3 +80,11 @@ def test_unmeasurable_metrics_become_null_not_a_crash(client):
     body = api.build_response(res, SquatConfig())
     json.dumps(body, allow_nan=False)
     assert body["reps"][0]["metrics"]["sticking_speed"] is None
+
+
+def test_browser_app_is_allowed_by_cors(client):
+    c, _ = client
+    r = c.options("/analyze", headers={"Origin": "http://localhost:61943",
+                                       "Access-Control-Request-Method": "POST"})
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] in ("*", "http://localhost:61943")

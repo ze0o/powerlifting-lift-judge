@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import 'models.dart';
 
@@ -46,7 +46,7 @@ class JudgeApi {
 
   /// Uploads a video and waits for the verdict (pose estimation runs on the server).
   Future<Analysis> analyze(
-    File video, {
+    XFile video, {
     String lift = 'squat',
     String modelSize = 'n',
     double creaseOffset = 0.07,
@@ -55,7 +55,9 @@ class JudgeApi {
       ..fields['lift'] = lift
       ..fields['model_size'] = modelSize
       ..fields['crease_offset'] = '$creaseOffset'
-      ..files.add(await http.MultipartFile.fromPath('video', video.path));
+      // bytes instead of a file path: in a browser there is no file path
+      ..files.add(http.MultipartFile.fromBytes('video', await video.readAsBytes(),
+          filename: video.name.isEmpty ? 'video.mp4' : video.name));
     final streamed = await _client.send(req).timeout(const Duration(minutes: 10));
     final body = await streamed.stream.bytesToString();
     return Analysis.fromJson(_decode(streamed.statusCode, body));

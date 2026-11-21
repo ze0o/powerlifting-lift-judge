@@ -55,7 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               hintText: 'http://192.168.1.20:8000',
-              helperText: "Your PC's Wi-Fi address (ipconfig). Emulator: http://10.0.2.2:8000",
+              helperText: "Chrome: http://localhost:8000 · Emulator: http://10.0.2.2:8000 · "
+                  "Phone: your PC's Wi-Fi address (ipconfig)",
             ),
           ),
           const SizedBox(height: 8),

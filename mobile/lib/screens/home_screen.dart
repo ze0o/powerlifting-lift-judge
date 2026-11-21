@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_picker/image_picker.dart';
@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final file = await _picker.pickVideo(source: source, maxDuration: const Duration(minutes: 2));
     if (file == null || !mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => AnalyzingScreen(video: File(file.path), settings: widget.settings),
+      builder: (_) => AnalyzingScreen(video: file, settings: widget.settings),
     ));
   }
 
@@ -101,18 +101,21 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 16),
           _ServerChip(online: _online, dl: _dl, url: widget.settings.serverUrl, onRetry: _ping),
           const SizedBox(height: 20),
-          _BigButton(
-            icon: Icons.videocam,
-            title: 'Record a set',
-            subtitle: 'Opens the camera',
-            primary: true,
-            onTap: () => _pick(ImageSource.camera),
-          ),
-          const SizedBox(height: 10),
+          if (!kIsWeb) ...[
+            _BigButton(
+              icon: Icons.videocam,
+              title: 'Record a set',
+              subtitle: 'Opens the camera',
+              primary: true,
+              onTap: () => _pick(ImageSource.camera),
+            ),
+            const SizedBox(height: 10),
+          ],
           _BigButton(
             icon: Icons.video_library_outlined,
             title: 'Choose a video',
-            subtitle: 'From your gallery',
+            subtitle: kIsWeb ? 'From your computer (.mp4, .mov)' : 'From your gallery',
+            primary: kIsWeb,
             onTap: () => _pick(ImageSource.gallery),
           ),
           const SizedBox(height: 10),

@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
 import '../settings.dart';
@@ -11,7 +11,7 @@ import 'results_screen.dart';
 
 /// Uploads the video, waits for the server, then replaces itself with the results.
 class AnalyzingScreen extends StatefulWidget {
-  final File video;
+  final XFile video;
   final AppSettings settings;
 
   const AnalyzingScreen({super.key, required this.video, required this.settings});
@@ -51,13 +51,12 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
       _fail(e.message);
     } on TimeoutException {
       _fail('The server took too long. Try a shorter video or the Nano model.');
-    } on Object catch (e) {
-      if (e is! SocketException && e is! http.ClientException) {
-        _fail('Something went wrong: $e');
-        return;
-      }
-      _fail("Can't reach the server at ${s.serverUrl}. Is it running, "
-          'and are the phone and PC on the same Wi-Fi?');
+    } on http.ClientException {
+      // no server, wrong address, or (in a browser) the request was blocked
+      _fail("Can't reach the server at ${s.serverUrl}. Is it running? "
+          'In Chrome use http://localhost:8000; on a phone use your PC\'s Wi-Fi address.');
+    } catch (e) {
+      _fail('Something went wrong: $e');
     }
   }
 
