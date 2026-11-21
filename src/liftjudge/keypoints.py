@@ -108,14 +108,65 @@ class PoseSequence:
                              width=int(meta["width"]), height=int(meta["height"]))
 
 
+def _iou(a: np.ndarray, b: np.ndarray) -> float:
+    """Overlap of two boxes given as (x1, y1, x2, y2)."""
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def select_lifter(frames: list[list[dict]], width: int, min_iou: float = 0.3) -> list[dict | None]:
+    """Pick the lifter in every frame from all detected people.
+
+    frames: per frame, a list of detections {"id", "box" (x1,y1,x2,y2), "kxy", "kconf"}.
+
+    1. The lifter is the track with the highest  sum over frames of
+       box area x centrality  - the biggest person, most often near the middle of
+       the frame. Spotters stand at the sides, referees and the crowd are smaller.
+    2. Spotters crowd in at the bottom of a squat and the tracker can lose the
+       lifter or give them a new id. Whenever the chosen track is missing, take the
+       detection that overlaps most with the lifter's last box (stitching).
+    """
+    score: dict[int, float] = {}
+    for dets in frames:
+        for d in dets:
+            x1, _, x2, _ = d["box"]
+            centre = 1.0 - abs((x1 + x2) / 2 - width / 2) / (width / 2)
+            area = (d["box"][2] - d["box"][0]) * (d["box"][3] - d["box"][1])
+            score[d["id"]] = score.get(d["id"], 0.0) + area * max(centre, 0.2)
+    if not score:
+        return [None] * len(frames)
+    best = max(score, key=score.get)
+
+    def follow(order: list[int], track: int) -> dict[int, dict]:
+        picks, last = {}, None
+        for i in order:
+            dets = frames[i]
+            pick = next((d for d in dets if d["id"] == track), None)
+            if pick is None and last is not None and dets:
+                cand = max(dets, key=lambda d: _iou(d["box"], last["box"]))
+                if _iou(cand["box"], last["box"]) >= min_iou:
+                    pick, track = cand, cand["id"]   # follow the new id from here on
+            if pick is not None:
+                picks[i], last = pick, pick
+        return picks
+
+    # start where the chosen track first appears, follow it forwards and backwards
+    first = next(i for i, dets in enumerate(frames) if any(d["id"] == best for d in dets))
+    picks = follow(list(range(first, len(frames))), best)
+    picks.update(follow(list(range(first, -1, -1)), best))
+    return [picks.get(i) for i in range(len(frames))]
+
+
 def extract_pose(video_path: str | Path, model: str = DEFAULT_MODEL,
                  min_conf: float = 0.25, device: str | None = None,
                  verbose: bool = False) -> PoseSequence:
     """Run a YOLO pose model over a video and return the lifter's keypoints.
 
-    The lifter is the tracked person with the largest total bounding-box area
-    over the video (biggest and most present person in frame). This filters out
-    spotters, referees and people walking past in the background.
+    All people are tracked; `select_lifter` picks the lifter and follows them
+    through id switches (see there).
     """
     import cv2
     from ultralytics import YOLO
@@ -129,32 +180,29 @@ def extract_pose(video_path: str | Path, model: str = DEFAULT_MODEL,
     cap.release()
 
     net = YOLO(model)
-    tracks: dict[int, dict[int, tuple[np.ndarray, np.ndarray, float]]] = {}
-    n_frames = 0
-    for f_idx, res in enumerate(net.track(source=str(video_path), stream=True,
-                                          persist=True, conf=min_conf,
-                                          device=device, verbose=verbose)):
-        n_frames = f_idx + 1
-        if res.keypoints is None or res.boxes is None or len(res.boxes) == 0:
-            continue
-        kxy = res.keypoints.xy.cpu().numpy()          # (N, 17, 2)
-        kconf = (res.keypoints.conf.cpu().numpy()
-                 if res.keypoints.conf is not None else np.ones(kxy.shape[:2]))
-        boxes = res.boxes.xywh.cpu().numpy()
-        ids = (res.boxes.id.cpu().numpy().astype(int)
-               if res.boxes.id is not None else np.arange(len(boxes)) - 1_000_000)
-        for j, tid in enumerate(ids):
-            area = float(boxes[j, 2] * boxes[j, 3])
-            tracks.setdefault(int(tid), {})[f_idx] = (kxy[j], kconf[j], area)
+    frames: list[list[dict]] = []
+    for res in net.track(source=str(video_path), stream=True, persist=True, conf=min_conf,
+                         device=device, verbose=verbose):
+        dets: list[dict] = []
+        if res.keypoints is not None and res.boxes is not None and len(res.boxes):
+            kxy = res.keypoints.xy.cpu().numpy()          # (N, 17, 2)
+            kconf = (res.keypoints.conf.cpu().numpy()
+                     if res.keypoints.conf is not None else np.ones(kxy.shape[:2]))
+            boxes = res.boxes.xyxy.cpu().numpy()
+            ids = (res.boxes.id.cpu().numpy().astype(int)
+                   if res.boxes.id is not None else -1_000_000 - np.arange(len(boxes)) - 1000 * len(frames))
+            for j, tid in enumerate(ids):
+                dets.append({"id": int(tid), "box": boxes[j], "kxy": kxy[j], "kconf": kconf[j]})
+        frames.append(dets)
 
+    n_frames = len(frames)
     xy = np.full((n_frames, len(KEYPOINTS), 2), np.nan)
     conf = np.zeros((n_frames, len(KEYPOINTS)))
-    if tracks:
-        best = max(tracks, key=lambda k: sum(v[2] for v in tracks[k].values()))
-        for f_idx, (k, c, _) in tracks[best].items():
-            xy[f_idx], conf[f_idx] = k, c
-        # YOLO returns (0, 0) for keypoints it could not place.
-        missing = (xy[..., 0] == 0) & (xy[..., 1] == 0)
-        xy[missing] = np.nan
-        conf[missing] = 0.0
+    for f_idx, d in enumerate(select_lifter(frames, width)):
+        if d is not None:
+            xy[f_idx], conf[f_idx] = d["kxy"], d["kconf"]
+    # YOLO returns (0, 0) for keypoints it could not place.
+    missing = (xy[..., 0] == 0) & (xy[..., 1] == 0)
+    xy[missing] = np.nan
+    conf[missing] = 0.0
     return PoseSequence(xy=xy, conf=conf, fps=fps, width=width, height=height)

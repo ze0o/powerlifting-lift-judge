@@ -1,8 +1,10 @@
 # Lift Judge: Flutter app
 
-Record or pick a squat video on your phone and get the verdict for every rep: referee
-lights, IPF card colours, the reason for each call, the annotated video, the depth curve
-and the neural network's second opinion.
+Record or pick a squat or deadlift video and get the verdict for every rep: referee lights,
+IPF card colours, the reason for each call, the annotated video, the depth / bar-height curve,
+the neural network's second opinion (squat), a warning when the camera angle is wrong, and a
+**Save for training** button that keeps the video on your PC in `data/raw/<lift>/` for labelling.
+The **How to film** screen shows where to put the camera.
 
 The judging runs on the Python server in this repo (YOLO26-pose + IPF rules + Keras model);
 the app uploads the video and shows the result. **See a sample result** works offline.
@@ -56,15 +58,16 @@ lib/
   settings.dart             server URL, pose model size, depth line (saved on the phone)
   theme.dart                dark "platform" theme, referee light + card colours
   screens/
-    home_screen.dart        record / pick / sample, server status, filming tips
+    home_screen.dart        lift picker, record / pick / sample, server status, filming tips
+    guide_screen.dart       how to film: top-down camera diagram + rules
     analyzing_screen.dart   upload + wait, friendly errors with retry
-    results_screen.dart     scoreboard, annotated video, depth chart, rep cards
+    results_screen.dart     camera-angle banner, scoreboard, video, chart, rep cards, save for training
     settings_screen.dart    server, model size, depth line
   widgets/
     ref_lights.dart         three referee lights + failure cards
     depth_chart.dart        depth over the set (CustomPainter, no chart package)
     rep_card.dart           checks, coaching metrics, network opinion, disagreement flag
-assets/sample.json          a real API response (synthetic set) for offline demo + tests
+assets/sample*.json         real API responses (synthetic squat + deadlift sets) for offline demo + tests
 test/app_test.dart          model parsing, API client (mocked), widget tests
 tool/setup_platforms.py     Android/iOS permissions after `flutter create`
 ```

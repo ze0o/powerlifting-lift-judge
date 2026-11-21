@@ -46,7 +46,7 @@ def to_h264(src: Path, dst: Path) -> bool:
 
 def render_video(video_path: str | Path, out_path: str | Path, seq: PoseSequence,
                  sig: pd.DataFrame, verdicts: list[RepVerdict], crease_offset: float = 0.07,
-                 hold_s: float = 1.5, h264: bool = True) -> Path:
+                 hold_s: float = 1.5, h264: bool = True, lift: str = "squat") -> Path:
     """Write the annotated video. With h264=True (default) it is re-encoded so it
     plays in a browser; without ffmpeg it falls back to OpenCV's mp4v."""
     import cv2
@@ -73,17 +73,19 @@ def render_video(video_path: str | Path, out_path: str | Path, seq: PoseSequence
                 pa, pb = pts[KP[a]], pts[KP[b]]
                 if np.isfinite(pa).all() and np.isfinite(pb).all():
                     cv2.line(img, tuple(int(v) for v in pa), tuple(int(v) for v in pb), WHITE, 2, cv2.LINE_AA)
-            for name in (f"{side}_hip", f"{side}_knee", f"{side}_ankle", f"{side}_shoulder"):
+            sides = ("left", "right") if side == "both" else (side,)
+            for name in (f"{s}_{j}" for s in sides for j in ("hip", "knee", "ankle", "shoulder")):
                 p = pts[KP[name]]
                 if np.isfinite(p).all():
                     cv2.circle(img, (int(p[0]), int(p[1])), 6, AMBER, -1, cv2.LINE_AA)
 
         active = next((v for v in verdicts if v.start <= f <= v.end + hold), None)
-        if active is not None and f < len(sig):
+        if active is not None and f < len(sig) and lift == "squat" and sig.attrs.get("view") != "front":
             # depth line: where the hip joint has to reach, drawn at the knee
             ky = int(sig["knee_y"].iloc[f] + crease_offset * thigh)
             kx = int(sig["knee_x"].iloc[f])
             cv2.line(img, (kx - int(thigh), ky), (kx + int(thigh), ky), AMBER, 2, cv2.LINE_AA)
+        if active is not None and f < len(sig):
             if f >= active.bottom:
                 y = _banner(cv2, img, f"Rep {active.rep + 1}: {active.label}", STATUS_COLOR[active.status])
                 for c in active.cards:
@@ -92,7 +94,7 @@ def render_video(video_path: str | Path, out_path: str | Path, seq: PoseSequence
                     cv2.putText(img, c.value, (60, y + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2, cv2.LINE_AA)
                     y += 65
                 for chk in active.checks:
-                    if chk.status in (Status.FAIL, Status.BORDERLINE):
+                    if chk.status in (Status.FAIL, Status.BORDERLINE, Status.UNKNOWN):
                         cv2.putText(img, chk.message[:70], (14, y + 20), cv2.FONT_HERSHEY_SIMPLEX,
                                     0.6, WHITE, 2, cv2.LINE_AA)
                         y += 28

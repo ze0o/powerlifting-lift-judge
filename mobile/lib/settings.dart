@@ -10,6 +10,7 @@ class AppSettings extends ChangeNotifier {
 
   String serverUrl = defaultServer;
   String modelSize = 'n'; // n, s, m, l: bigger = more precise, slower
+  String lift = 'squat'; // squat | deadlift
   double creaseOffset = 0.07;
 
   Future<void> load() async {
@@ -17,10 +18,11 @@ class AppSettings extends ChangeNotifier {
     serverUrl = p.getString('serverUrl') ?? defaultServer;
     modelSize = p.getString('modelSize') ?? 'n';
     creaseOffset = p.getDouble('creaseOffset') ?? 0.07;
+    lift = p.getString('lift') ?? 'squat';
     notifyListeners();
   }
 
-  Future<void> save({String? serverUrl, String? modelSize, double? creaseOffset}) async {
+  Future<void> save({String? serverUrl, String? modelSize, double? creaseOffset, String? lift}) async {
     final p = await SharedPreferences.getInstance();
     if (serverUrl != null) {
       this.serverUrl = serverUrl.trim();
@@ -29,6 +31,10 @@ class AppSettings extends ChangeNotifier {
     if (modelSize != null) {
       this.modelSize = modelSize;
       await p.setString('modelSize', modelSize);
+    }
+    if (lift != null) {
+      this.lift = lift;
+      await p.setString('lift', lift);
     }
     if (creaseOffset != null) {
       this.creaseOffset = creaseOffset;

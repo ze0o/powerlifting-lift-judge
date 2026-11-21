@@ -13,6 +13,8 @@ data/
 
 ## How to record (this decides the accuracy)
 
+Full guide with the camera diagram: [docs/filming_guide.md](../docs/filming_guide.md).
+
 - **Side view** for the squat and deadlift, camera at **hip height**, about 3–5 m away.
   The far-side leg is hidden from the side, so the near side is used.
 - Camera **square to the lifter** (perpendicular to the line between the feet).
@@ -49,7 +51,7 @@ Copy `labels_template.csv` to start.
 | `good_lift` | 1 = white light, 0 = no lift |
 | `cards` | failed card colours, e.g. `red` or `red+blue`, empty if good |
 | `camera` | side / front / angled-45 |
-| `depth`, `lockout`, `bounce`, `downward`, `feet` | 1 if the rep has that fault, else 0 (used to fine-tune the deep learning model) |
+| `depth`, `lockout`, `bounce`, `downward`, `hitching`, `feet` | 1 if the rep has that fault, else 0, empty if it doesn't apply to the lift (used to fine-tune the deep learning model) |
 | `notes` | free text |
 
 Aim for **at least 150 squat reps** with a good number of high and borderline

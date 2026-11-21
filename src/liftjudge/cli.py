@@ -35,7 +35,7 @@ def _analyze(args) -> int:
     with open(out / f"{src.stem}_verdicts.json", "w") as f:
         json.dump([v.to_dict() for v in res.verdicts], f, indent=2)
 
-    if args.dl_model:
+    if args.dl_model and args.lift == "squat":
         from .dl import FAULT_TEXT, FAULTS, load_model, predict_faults
         probs = predict_faults(load_model(args.dl_model), res)
         probs.to_csv(out / f"{src.stem}_dl_faults.csv", index=False)
@@ -47,7 +47,7 @@ def _analyze(args) -> int:
     if not args.no_video and src.suffix.lower() != ".csv":
         from .render import render_video
         path = render_video(src, out / f"{src.stem}_judged.mp4", pose, res.signals,
-                            res.verdicts, cfg.crease_offset)
+                            res.verdicts, cfg.crease_offset, lift=args.lift)
         print(f"Annotated video: {path}")
     return 0
 
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     lb.add_argument("folder", help="folder with videos, e.g. data/raw/squat")
     lb.add_argument("--out", default="data/labels_draft.csv")
     lb.add_argument("--snapshots", default="data/snapshots", help="folder for bottom-position images ('' to skip)")
-    lb.add_argument("--lift", default="squat", choices=["squat"])
+    lb.add_argument("--lift", default="squat", choices=["squat", "deadlift"])
     lb.add_argument("--model", default=DEFAULT_MODEL, help="YOLO pose weights")
     lb.set_defaults(func=_label)
 

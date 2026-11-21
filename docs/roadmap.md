@@ -7,7 +7,9 @@
 | 2 | **Calibration + ML**: calibrate the crease offset; rep classifier (logistic regression, random forest) on rep features | ✅ pipeline done (synthetic) |
 | 2a | **Deep learning**: Keras Conv1D + GRU sequence model, multi-label faults, synthetic pre-training + fine-tuning recipe | ✅ done (synthetic); fine-tune on real reps next |
 | 2b | **Barbell tracking**: fine-tune YOLO26 to detect plates/bar ends; bar path + velocity | ⏳ |
-| 3 | **Deadlift** (lockout, hitching) and **bench press** (pause, sinking, butt lift) | ⏳ |
+| 3 | **Deadlift** (lockout, erect, downward movement, hitching, feet) | ✅ built (synthetic-tested) |
+| 3b | **Bench press** (pause, sinking, butt lift): needs a barbell detector | ⏳ design first |
+| 3c | **Camera-angle detection** + lifter tracking through spotters | ✅ built |
 | 4 | **Demo app**: Streamlit page, upload a video, get the judged video back | ✅ done |
 | 5 | **Mobile**: Flutter app + FastAPI server | ✅ built (`mobile/`); on-device ML Kit mode ⏳ |
 | 6 | **Portfolio**: demo GIF, results table, LinkedIn post, CV bullet | ⏳ |

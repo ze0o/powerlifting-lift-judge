@@ -44,9 +44,25 @@ def angle(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> np.ndarray:
     return np.degrees(np.arccos(np.clip(cos, -1.0, 1.0)))
 
 
+def _joint(seq: PoseSequence, side: str, joint: str, min_conf: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
+    """(T, 2) points and (T,) confidence of a joint; side "both" = confidence-weighted
+    average of left and right (used for front views, where one side isn't 'nearer')."""
+    from .keypoints import KP
+    if side != "both":
+        return seq.point(f"{side}_{joint}"), seq.conf[:, KP[f"{side}_{joint}"]]
+    l, r = seq.point(f"left_{joint}"), seq.point(f"right_{joint}")
+    cl, cr = seq.conf[:, KP[f"left_{joint}"]], seq.conf[:, KP[f"right_{joint}"]]
+    wl = np.where((cl >= min_conf) & np.isfinite(l).all(1), cl, 0.0)
+    wr = np.where((cr >= min_conf) & np.isfinite(r).all(1), cr, 0.0)
+    tot = wl + wr
+    pts = (np.nan_to_num(l) * wl[:, None] + np.nan_to_num(r) * wr[:, None]) / np.where(tot > 0, tot, 1)[:, None]
+    pts[tot == 0] = np.nan
+    return pts, np.maximum(cl, cr)
+
+
 def body_signals(seq: PoseSequence, side: str | None = None,
                  smooth_window_s: float = 0.2) -> pd.DataFrame:
-    """Per-frame signals for one side of the body.
+    """Per-frame signals for one side of the body ("left", "right", or "both").
 
     Columns
     -------
@@ -58,13 +74,11 @@ def body_signals(seq: PoseSequence, side: str | None = None,
     knee_angle, hip_angle, elbow_angle   joint angles in degrees (180 = straight)
     leg_conf                        mean confidence of hip, knee, ankle
     """
-    from .keypoints import KP
-
     side = side or choose_side(seq)
     out = {"time_s": seq.t}
-    pts = {}
+    pts, confs = {}, {}
     for j in SIDE_JOINTS:
-        p = seq.point(f"{side}_{j}")
+        p, confs[j] = _joint(seq, side, j)
         sx = fill_and_smooth(p[:, 0], seq.fps, smooth_window_s)
         sy = fill_and_smooth(p[:, 1], seq.fps, smooth_window_s)
         pts[j] = np.stack([sx, sy], axis=1)
@@ -81,7 +95,7 @@ def body_signals(seq: PoseSequence, side: str | None = None,
     out["knee_angle"] = angle(pts["hip"], pts["knee"], pts["ankle"])
     out["hip_angle"] = angle(pts["shoulder"], pts["hip"], pts["knee"])
     out["elbow_angle"] = angle(pts["shoulder"], pts["elbow"], pts["wrist"])
-    out["leg_conf"] = seq.conf[:, [KP[f"{side}_{j}"] for j in ("hip", "knee", "ankle")]].mean(1)
+    out["leg_conf"] = np.mean([confs[j] for j in ("hip", "knee", "ankle")], axis=0)
     df = pd.DataFrame(out)
     df.attrs.update(side=side, fps=seq.fps)
     return df

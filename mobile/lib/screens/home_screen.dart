@@ -11,6 +11,7 @@ import '../settings.dart';
 import '../theme.dart';
 import '../widgets/ref_lights.dart';
 import 'analyzing_screen.dart';
+import 'guide_screen.dart';
 import 'results_screen.dart';
 import 'settings_screen.dart';
 
@@ -62,7 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Sample works offline: a result bundled with the app (synthetic 3-rep set).
   Future<void> _sample() async {
-    final json = jsonDecode(await rootBundle.loadString('assets/sample.json')) as Map<String, dynamic>;
+    final asset = widget.settings.lift == 'deadlift' ? 'assets/sample_deadlift.json' : 'assets/sample.json';
+    final json = jsonDecode(await rootBundle.loadString(asset)) as Map<String, dynamic>;
     if (!mounted) return;
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ResultsScreen(analysis: Analysis.fromJson(json), isSample: true),
@@ -94,9 +96,26 @@ class _HomeScreenState extends State<HomeScreen> {
               style: t.headlineMedium?.copyWith(fontWeight: FontWeight.w800, height: 1.1)),
           const SizedBox(height: 8),
           Text(
-            'Film your squat from the side. Every rep is checked against the IPF rules: depth, '
-            'lockout, double bounce, downward movement and stepping, with the reason for every call.',
+            'Film your lift from the side. Every rep is checked against the IPF rules, with the '
+            'reason for every call.',
             style: t.bodyLarge?.copyWith(color: AppColors.muted),
+          ),
+          const SizedBox(height: 18),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'squat', label: Text('Squat')),
+              ButtonSegment(value: 'deadlift', label: Text('Deadlift')),
+              ButtonSegment(value: 'bench', label: Text('Bench · soon'), enabled: false),
+            ],
+            selected: {widget.settings.lift},
+            onSelectionChanged: (s) => widget.settings.save(lift: s.first),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.settings.lift == 'deadlift'
+                ? 'Checks: knees locked, standing erect, downward movement, hitching, feet.'
+                : 'Checks: depth, knees locked, double bounce, downward movement, feet.',
+            style: t.bodySmall?.copyWith(color: AppColors.muted),
           ),
           const SizedBox(height: 16),
           _ServerChip(online: _online, dl: _dl, url: widget.settings.serverUrl, onRetry: _ping),
@@ -128,16 +147,21 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 24),
           Text('FILMING TIPS', style: t.labelMedium?.copyWith(color: AppColors.muted, letterSpacing: 1.2)),
           const SizedBox(height: 8),
-          const Card(
+          Card(
             child: Padding(
-              padding: EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Tip('Side view, camera at hip height'),
-                  _Tip('Camera square to the lifter, not angled'),
-                  _Tip('Whole body and the bar in frame for the whole set'),
-                  _Tip('Phone on a tripod or a fixed stand'),
+                  const _Tip('Side view, camera at hip height, not from the front'),
+                  const _Tip('Camera square to the lifter, not angled'),
+                  const _Tip('Whole body and the bar in frame for the whole set'),
+                  const _Tip('Spotters behind the lifter, phone on a tripod'),
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GuideScreen())),
+                    icon: const Icon(Icons.menu_book_outlined, size: 18),
+                    label: const Text('Full filming guide'),
+                  ),
                 ],
               ),
             ),

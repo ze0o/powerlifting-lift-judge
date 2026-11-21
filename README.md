@@ -1,8 +1,8 @@
 # 🏋️ Powerlifting Lift Judge
 
-**Computer vision that judges powerlifting technique from a phone video, using the IPF rules.**
+**Computer vision that judges powerlifting technique (squat and deadlift) from a phone video, using the IPF rules.**
 
-Upload a side-view video of a squat set and get, for every rep:
+Upload a side-view video of a squat or deadlift set and get, for every rep:
 **GOOD LIFT / NO LIFT / BORDERLINE**, the referee card colour (🔴 🔵 🟡) and the
 reason, such as *"High: hip crease did not go below the top of the knee"* or
 *"Downward movement during the ascent"*.
@@ -10,7 +10,7 @@ reason, such as *"High: hip crease did not go below the top of the knee"* or
 Built for **lifters** checking their training sets, **coaches** reviewing technique
 remotely, and **federations** that want an objective second opinion on close calls.
 
-> Status: squat rule engine + deep learning model (phase 2). Bench press and deadlift are on the [roadmap](docs/roadmap.md).
+> Status: squat and deadlift rule engines, camera-angle detection, deep learning model (squat), web demo and Flutter app. Bench press is on the [roadmap](docs/roadmap.md).
 
 ---
 
@@ -48,6 +48,26 @@ keypoints are exact. Calibrating that offset on labelled videos is phase 2.
 | 🟡 | Stepping | ankle displacement during the rep |
 
 It also reports coaching metrics: descent/ascent time, sticking-point speed and horizontal sway.
+
+## Deadlift checks
+
+| Card | Failure | Check |
+|---|---|---|
+| 🔴 | Knees not locked / not standing erect | knee and hip angle at lockout ≥ 165° |
+| 🔵 | Downward movement before lockout | bar (wrists) dropping during the pull |
+| 🔵 | Hitching | knees re-bending with the bar on the thighs |
+| 🟡 | Stepping | ankle displacement |
+
+## Camera angle and crowded platforms
+
+- **Camera-angle detection**: from the side, the left and right shoulders overlap in the picture;
+  from the front they're a body-width apart. The judge measures this and **refuses to judge depth
+  from a front view** (the hip and knee overlap when the thighs point at the camera) instead of
+  giving a confident wrong answer. A 45° view gets a wider borderline zone.
+- **Following the lifter through spotters**: the lifter is the biggest person who stays near the
+  middle of the frame; when spotters crowd in and the tracker loses them, the judge re-attaches
+  to whoever overlaps the lifter's last position.
+- **[Filming guide](docs/filming_guide.md)**: where to put the camera, also built into the app.
 
 ## Web demo
 
@@ -153,7 +173,7 @@ Rep 2: NO LIFT  [red card]
 ```
 
 **Recording tips** (they matter more than the model): side view, camera at hip height and square to the
-lifter, whole body in frame, phone on a tripod. See [data/README.md](data/README.md).
+lifter, whole body in frame, phone on a tripod. See the [filming guide](docs/filming_guide.md).
 For close depth calls use a bigger pose model: `--model yolo26s-pose.pt` or `yolo26m-pose.pt`.
 
 ## Project structure
@@ -163,7 +183,8 @@ src/liftjudge/
   keypoints.py     video → lifter keypoints (YOLO26-pose + tracking)
   signals.py       keypoints → depth, joint angles, velocities
   reps.py          rep segmentation
-  rules/           IPF rules per lift (squat done; bench, deadlift planned)
+  rules/           IPF rules per lift (squat, deadlift; bench planned)
+  view.py          camera-angle detection (side / angled / front)
   features.py      rep-level feature table for ML / calibration
   dl.py            Keras sequence model: rep → fault probabilities, synthetic pre-training, fine-tuning
   render.py        annotated output video (H.264)
@@ -184,7 +205,8 @@ tests/             rule and model tests on synthetic lifts
 
 ## Limitations
 
-- 2-D video from one camera: a camera that isn't square to the lifter shifts the apparent depth.
+- 2-D video from one camera: a camera that isn't square to the lifter shifts the apparent depth
+  (the judge detects front and angled views and says so).
 - Commands from the Chief Referee can't be judged from video.
 - Rules are validated on synthetic data so far; accuracy on real lifts will be reported after labelling (phase 1b).
 - Intended as a **training aid and second opinion**, not a replacement for referees.

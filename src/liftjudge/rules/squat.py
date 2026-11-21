@@ -63,17 +63,23 @@ def judge_rep(sig: pd.DataFrame, rep: Rep, cfg: SquatConfig | None = None) -> Re
     v = RepVerdict(lift="squat", rep=rep.index, start=rep.start, bottom=rep.bottom, end=rep.end)
 
     # ---- RED: depth -------------------------------------------------------
+    view = sig.attrs.get("view", "side")
+    band = cfg.borderline_band * (2 if view == "angled" else 1)
     max_depth = float(depth[rep.bottom])
     margin = max_depth - cfg.crease_offset
     conf = float(sig["leg_conf"].iloc[max(0, rep.bottom - 2): rep.bottom + 3].mean())
-    if conf < cfg.min_leg_conf:
+    if view == "front":
+        st, msg = Status.UNKNOWN, "Depth not judged: filmed from the front. Film from the side to judge depth"
+    elif conf < cfg.min_leg_conf:
         st, msg = Status.UNKNOWN, f"Depth unclear: legs hard to see at the bottom (confidence {conf:.2f})"
-    elif margin > cfg.borderline_band:
+    elif margin > band:
         st, msg = Status.PASS, f"Depth: hip crease below the knee (+{margin:.2f} thighs)"
-    elif margin < -cfg.borderline_band:
+    elif margin < -band:
         st, msg = Status.FAIL, f"High: hip crease did not go below the top of the knee ({margin:+.2f} thighs)"
     else:
         st, msg = Status.BORDERLINE, f"Depth borderline ({margin:+.2f} thighs): too close to call from video"
+    if view == "angled" and st != Status.UNKNOWN:
+        msg += " (angled camera: wider borderline zone)"
     v.checks.append(Check("squat_depth", Card.RED, st, msg, rep.bottom, margin, 0.0))
 
     # ---- BLUE: knees locked at start and finish ----------------------------

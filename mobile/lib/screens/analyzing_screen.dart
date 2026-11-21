@@ -39,11 +39,13 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
     final s = widget.settings;
     final api = JudgeApi(s.serverUrl);
     try {
-      final result = await api.analyze(widget.video, modelSize: s.modelSize, creaseOffset: s.creaseOffset);
+      final result = await api.analyze(widget.video,
+          lift: s.lift, modelSize: s.modelSize, creaseOffset: s.creaseOffset);
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => ResultsScreen(
           analysis: result,
+          api: api,
           videoUrl: result.videoUrl == null ? null : api.videoUrl(result.videoUrl!),
         ),
       ));
@@ -79,8 +81,9 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
                     'Uploading the video',
                     'Finding the lifter and tracking 17 body points',
                     'Splitting the set into reps',
+                    'Checking the camera angle',
                     'Checking each rep against the IPF rules',
-                    'Asking the neural network for a second opinion',
+                    'Asking the neural network for a second opinion (squat)',
                   ])
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),

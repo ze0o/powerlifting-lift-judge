@@ -60,6 +60,7 @@ class DlOpinion {
 }
 
 class RepVerdict {
+  final String lift;
   final int rep; // 1-based for display
   final CheckStatus status;
   final String label;
@@ -72,6 +73,7 @@ class RepVerdict {
   final DlOpinion? dl;
 
   const RepVerdict({
+    required this.lift,
     required this.rep,
     required this.status,
     required this.label,
@@ -89,6 +91,7 @@ class RepVerdict {
       dl != null && status != CheckStatus.borderline && dl!.noLift != (status == CheckStatus.fail);
 
   factory RepVerdict.fromJson(Map<String, dynamic> j) => RepVerdict(
+        lift: j['lift'] as String? ?? 'squat',
         rep: (j['rep'] as num).toInt() + 1,
         status: _status(j['status'] as String),
         label: j['label'] as String,
@@ -116,45 +119,66 @@ class Summary {
       );
 }
 
+/// Which way the camera looked at the lifter (detected from the keypoints).
+class CameraView {
+  final String kind; // side | angled | front | unknown
+  final String message;
+  const CameraView(this.kind, this.message);
+
+  bool get isSide => kind == 'side';
+
+  factory CameraView.fromJson(Map<String, dynamic>? j) =>
+      j == null ? const CameraView('unknown', '') : CameraView(j['kind'] as String, j['message'] as String? ?? '');
+}
+
 class Analysis {
-  final String lift;
+  final String lift; // squat | deadlift
   final Summary summary;
   final List<RepVerdict> reps;
+  final String metric; // depth (squat) | bar_height (deadlift)
   final List<double> timeS;
-  final List<double> depth;
-  final double creaseOffset;
-  final double borderlineBand;
+  final List<double> values;
+  final double? creaseOffset; // squat only
+  final double? borderlineBand;
+  final CameraView view;
   final String? videoUrl; // relative to the server, e.g. /videos/abc.mp4
+  final String? jobId; // set for uploads: needed to save the video for training
   final bool dlAvailable;
 
   const Analysis({
     required this.lift,
     required this.summary,
     required this.reps,
+    required this.metric,
     required this.timeS,
-    required this.depth,
+    required this.values,
     required this.creaseOffset,
     required this.borderlineBand,
+    required this.view,
     required this.videoUrl,
+    required this.jobId,
     required this.dlAvailable,
   });
 
   factory Analysis.fromJson(Map<String, dynamic> j) {
     final series = j['series'] as Map<String, dynamic>;
-    final cfg = j['config'] as Map<String, dynamic>;
+    final cfg = (j['config'] as Map<String, dynamic>?) ?? const <String, dynamic>{};
     List<double> nums(String k) =>
-        (series[k] as List).map((v) => (v as num?)?.toDouble() ?? 0).toList();
+        ((series[k] as List?) ?? const <Object?>[]).map((v) => (v as num?)?.toDouble() ?? 0).toList();
     return Analysis(
       lift: j['lift'] as String,
       summary: Summary.fromJson(j['summary'] as Map<String, dynamic>),
       reps: (j['reps'] as List)
           .map((r) => RepVerdict.fromJson(r as Map<String, dynamic>))
           .toList(),
+      metric: series['metric'] as String? ?? 'depth',
       timeS: nums('time_s'),
-      depth: nums('depth'),
-      creaseOffset: _d(cfg['crease_offset']) ?? 0.07,
-      borderlineBand: _d(cfg['borderline_band']) ?? 0.04,
+      values: nums('value'),
+      creaseOffset: _d(cfg['crease_offset']),
+      borderlineBand: _d(cfg['borderline_band']),
+      view: CameraView.fromJson(j['view'] as Map<String, dynamic>?),
       videoUrl: j['video_url'] as String?,
+      jobId: j['job_id'] as String?,
       dlAvailable: j['dl_available'] as bool? ?? false,
     );
   }

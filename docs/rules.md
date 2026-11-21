@@ -48,10 +48,33 @@ tool that admits "too close to call" is more trustworthy than one that guesses.
 
 Needs a **barbell/plate detector**: from the side, the wrists are often hidden behind the plates.
 
-## Deadlift (planned: phase 3)
+## Deadlift (built)
 
-| Card | IPF failure | Planned measurement |
-|---|---|---|
-| 🔴 Red | Knees not locked; front deltoid not behind the bar; not erect with shoulders back | Knee angle, shoulder x vs bar x at lockout |
-| 🔵 Blue | Downward movement of the bar before the final position; supporting the bar on the thighs | Bar height signal going down before lockout (hitching) |
-| 🟡 Yellow | Lowering before the signal; dropping the bar | Out of scope (needs the referee signal) |
+The bar is tracked through the wrists (arms hang straight). A rep runs from the bar leaving
+the floor, up to its highest point (lockout), and back down.
+
+| Card | IPF failure | How we measure it | Default threshold |
+|---|---|---|---|
+| 🔴 Red | Knees not locked at completion | Max knee angle while the bar is at its highest | ≥ 165° |
+| 🔴 Red | Not standing erect with shoulders back | Max hip angle (shoulder–hip–knee) at lockout | ≥ 165° |
+| 🔵 Blue | Downward movement of the bar before the final position | Largest drop of the bar below its highest point so far, during the pull | > 0.05 thighs |
+| 🔵 Blue | Supporting the bar on the thighs (hitching) | Knees re-bending during the pull while the bar is above the knees | > 8° |
+| 🟡 Yellow | Stepping / moving the feet | Largest ankle displacement | > 0.15 thighs |
+
+Not judged from video: lowering before the Chief Referee's "Down" signal, dropping the bar.
+
+Coaching metrics: `pull_s`, `hold_s`, `lockout_knee`, `lockout_hip`, `bar_drift`, `sticking_speed`.
+
+## Camera angle
+
+Before judging, the camera angle is detected from the keypoints (`view.py`): body width
+(left–right shoulders and hips) divided by torso length. From the side the two sides overlap
+(ratio < 0.25); from the front they're a body-width apart (> 0.45; competition front footage
+measured 0.52 standing and 0.73 in the hole).
+
+- **Side**: everything is judged.
+- **Angled**: the squat depth borderline band is doubled.
+- **Front/back**: squat depth, deadlift lockout and hitching are not judged (status
+  *unknown*, so the rep becomes *borderline*); left and right legs are averaged.
+
+See [filming_guide.md](filming_guide.md).

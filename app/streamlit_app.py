@@ -61,25 +61,29 @@ def dl_model():
 # ---------------------------------------------------------------- sidebar
 with st.sidebar:
     st.header("Settings")
-    lift = st.selectbox("Lift", ["squat"], help="Bench press and deadlift are on the roadmap.")
+    lift = st.selectbox("Lift", ["squat", "deadlift"], format_func=str.title,
+                        help="Bench press is on the roadmap (needs bar tracking).")
     size = st.select_slider("Pose model", ["n", "s", "m", "l"], value="n",
                             help="Bigger = more precise keypoints, slower. 'n' is fine for a first look; "
                                  "use 's' or 'm' for close depth calls.")
+    if lift != "squat":
+        st.caption("Depth settings apply to the squat only.")
     offset = st.slider("Crease offset (thighs)", 0.0, 0.2, SquatConfig.crease_offset, 0.01,
                        help="How far below the knee joint the hip joint must go for the hip crease to pass "
                             "the top of the knee. Calibrate it on labelled videos (notebook 02).")
     band = st.slider("Borderline band (± thighs)", 0.0, 0.1, SquatConfig.borderline_band, 0.01)
     st.divider()
     st.markdown("**Recording tips**\n- Side view, camera at hip height\n- Camera square to the lifter\n"
-                "- Whole body + bar in frame\n- Phone on a tripod")
+                "- Whole body + bar in frame\n- Phone on a tripod\n\n"
+                "Full guide: docs/filming_guide.md")
 
 st.title("🏋️ Powerlifting Lift Judge")
-st.caption("Judges every rep of a squat video against the IPF rules, explains the call, and gives a "
-           "neural-network second opinion. A training aid, not a replacement for referees.")
+st.caption("Judges every rep of a squat or deadlift video against the IPF rules and explains the call "
+           "(plus a neural-network second opinion for squats). A training aid, not a replacement for referees.")
 
 col_a, col_b = st.columns([3, 1])
-upload = col_a.file_uploader("Side-view squat video", type=["mp4", "mov", "avi", "m4v", "mkv"])
-sample = col_b.button("Try a sample set", help="Synthetic keypoints: 3 reps, one high, one with a bounce")
+upload = col_a.file_uploader(f"Side-view {lift} video", type=["mp4", "mov", "avi", "m4v", "mkv"])
+sample = col_b.button("Try a sample set", help="Synthetic keypoints: 3 reps, one good and two with faults")
 
 # ---------------------------------------------------------------- run
 pose, video_path = None, None
@@ -93,11 +97,8 @@ if upload is not None:
     st.session_state.pop("sample", None)
 elif sample or st.session_state.get("sample"):
     st.session_state["sample"] = True
-    import numpy as np
-    from liftjudge.synthetic import make_squat
-    parts = [make_squat(depth_deg=d, bounce=b, seed=s) for d, b, s in ((14, False, 1), (-6, False, 2), (12, True, 3))]
-    pose = PoseSequence(xy=np.concatenate([p.xy for p in parts]), conf=np.concatenate([p.conf for p in parts]),
-                        fps=parts[0].fps, width=parts[0].width, height=parts[0].height)
+    from liftjudge.synthetic import sample_set
+    pose = sample_set(lift)
     st.info("Sample mode: synthetic keypoints, so there's no video. Upload your own set to see the annotated video.")
 
 if pose is None:
@@ -109,6 +110,9 @@ try:
 except ValueError as e:
     st.error(f"Couldn't read the lifter's legs: {e} Is the whole body in frame, filmed from the side?")
     st.stop()
+
+if res.view and res.view.kind != "side":
+    (st.error if res.view.kind == "front" else st.warning)(f"📷 {res.view.message}")
 
 if not res.verdicts:
     st.warning("No reps found. Check the camera angle: side view, whole body in frame for the whole set.")
@@ -123,7 +127,7 @@ m[2].metric("No lifts", sum(s == Status.FAIL for s in statuses))
 m[3].metric("Borderline", sum(s == Status.BORDERLINE for s in statuses))
 
 dl = None
-model = dl_model()
+model = dl_model() if lift == "squat" else None
 if model is not None:
     from liftjudge.dl import FAULT_TEXT, FAULTS, predict_faults
     dl = predict_faults(model, res)
@@ -137,8 +141,12 @@ with left:
             for c in v.checks:
                 st.markdown(f"{STATUS_ICON[c.status.value]} {c.message}")
             met = v.metrics
-            st.caption(f"descent {met['descent_s']:.2f}s · ascent {met['ascent_s']:.2f}s · "
-                       f"sticking speed {met['sticking_speed']:.2f} thighs/s · sway {met['shoulder_drift']:.2f} thighs")
+            if lift == "squat":
+                st.caption(f"descent {met['descent_s']:.2f}s · ascent {met['ascent_s']:.2f}s · "
+                           f"sticking speed {met['sticking_speed']:.2f} thighs/s · sway {met['shoulder_drift']:.2f} thighs")
+            else:
+                st.caption(f"pull {met['pull_s']:.2f}s · lockout knee {met['lockout_knee']:.0f}° · "
+                           f"hip {met['lockout_hip']:.0f}° · bar drift {met['bar_drift']:.2f} thighs")
             if dl is not None:
                 r = dl.iloc[v.rep]
                 found = [f"{FAULT_TEXT[f]} ({r[f]:.0%})" for f in FAULTS if r[f] >= 0.5]
@@ -150,28 +158,35 @@ with right:
     if video_path is not None:
         st.subheader("Annotated video")
         from liftjudge.render import render_video
-        out = video_path.with_name(video_path.stem + f"_judged_{offset:.2f}_{band:.2f}.mp4")
+        out = video_path.with_name(video_path.stem + f"_judged_{lift}_{offset:.2f}_{band:.2f}.mp4")
         if not out.exists():
             with st.spinner("Drawing the skeleton and verdicts..."):
-                render_video(video_path, out, res.pose, res.signals, res.verdicts, cfg.crease_offset)
+                render_video(video_path, out, res.pose, res.signals, res.verdicts, cfg.crease_offset, lift=lift)
         st.video(str(out))
 
-    st.subheader("Depth over the set")
     sig = res.signals
     fig, ax = plt.subplots(figsize=(7, 3))
-    ax.plot(sig.time_s, sig.depth, lw=1.5, label="hip below knee (thighs)")
-    ax.axhline(cfg.crease_offset, color="tab:orange", lw=1, label="depth line")
-    ax.axhspan(cfg.crease_offset - cfg.borderline_band, cfg.crease_offset + cfg.borderline_band,
-               color="tab:orange", alpha=0.15)
+    if lift == "squat":
+        st.subheader("Depth over the set")
+        curve = sig.depth.to_numpy()
+        ax.plot(sig.time_s, curve, lw=1.5, label="hip below knee (thighs)")
+        ax.axhline(cfg.crease_offset, color="tab:orange", lw=1, label="depth line")
+        ax.axhspan(cfg.crease_offset - cfg.borderline_band, cfg.crease_offset + cfg.borderline_band,
+                   color="tab:orange", alpha=0.15)
+    else:
+        from liftjudge.rules.deadlift import bar_height
+        st.subheader("Bar height over the set")
+        curve = bar_height(sig)
+        ax.plot(sig.time_s, curve, lw=1.5, label="bar above the feet (thighs)")
     for v in res.verdicts:
         col = {"pass": "tab:green", "fail": "tab:red"}.get(v.status.value, "tab:orange")
         ax.axvspan(sig.time_s[v.start], sig.time_s[v.end], color=col, alpha=0.08)
-        ax.annotate(f"{v.rep + 1}", (sig.time_s[v.bottom], sig.depth[v.bottom]), textcoords="offset points",
+        ax.annotate(f"{v.rep + 1}", (sig.time_s[v.bottom], curve[v.bottom]), textcoords="offset points",
                     xytext=(0, 6), ha="center")
     ax.set_xlabel("time (s)"); ax.legend(loc="lower right", fontsize=8)
     st.pyplot(fig, clear_figure=True)
 
-if dl is None:
+if dl is None and lift == "squat":
     st.caption("🧠 Neural-network second opinion is off: run `liftjudge train-dl` to create "
                "models/rep_fault_net.keras (needs Keras).")
 

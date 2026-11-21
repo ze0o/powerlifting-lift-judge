@@ -16,13 +16,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .dl import FAULTS, _rule_faults
 from .features import VIDEO_EXTS
 from .keypoints import KP, SKELETON, PoseSequence
 from .rules.base import Status
 
 LABEL_COLUMNS = ["video_id", "rep", "lift", "judge", "start_s", "bottom_s", "end_s",
-                 "depth_ok", "good_lift", "cards", *FAULTS, "camera", "rule_depth_margin", "notes"]
+                 "depth_ok", "good_lift", "cards", "depth", "lockout", "bounce", "downward", "hitching", "feet",
+                 "camera", "rule_depth_margin", "notes"]
 
 
 def _pose_for(video: Path, cache: bool = True, model: str | None = None) -> PoseSequence:
@@ -36,25 +36,39 @@ def _pose_for(video: Path, cache: bool = True, model: str | None = None) -> Pose
     return pose
 
 
+# rule check -> fault column (both lifts share the columns; "" where a fault doesn't apply)
+FAULT_OF = {
+    "squat_depth": "depth", "squat_lockout_start": "lockout", "squat_lockout_finish": "lockout",
+    "squat_bounce": "bounce", "squat_downward_movement": "downward", "squat_feet": "feet",
+    "deadlift_knees_locked": "lockout", "deadlift_erect": "lockout",
+    "deadlift_downward_movement": "downward", "deadlift_hitching": "hitching", "deadlift_feet": "feet",
+}
+FAULT_COLUMNS = ["depth", "lockout", "bounce", "downward", "hitching", "feet"]
+
+
 def rep_rows(analysis, video_id: str) -> list[dict]:
     fps = analysis.pose.fps
+    camera = analysis.view.kind if analysis.view else ""
     rows = []
     for v in analysis.verdicts:
-        depth = next(c for c in v.checks if c.code == "squat_depth")
+        depth = next((c for c in v.checks if c.code == "squat_depth"), None)
         unsure = {c.code for c in v.checks if c.status in (Status.BORDERLINE, Status.UNKNOWN)}
-        faults = _rule_faults(v)
         row = {
             "video_id": video_id, "rep": v.rep + 1, "lift": v.lift, "judge": "auto",
             "start_s": round(v.start / fps, 2), "bottom_s": round(v.bottom / fps, 2), "end_s": round(v.end / fps, 2),
-            "depth_ok": "" if "squat_depth" in unsure else int(depth.status == Status.PASS),
+            "depth_ok": "" if depth is None or "squat_depth" in unsure else int(depth.status == Status.PASS),
             "good_lift": "" if v.status == Status.BORDERLINE else int(v.status == Status.PASS),
             "cards": "+".join(c.value for c in v.cards),
-            "camera": "side",
-            "rule_depth_margin": round(float(depth.value), 3) if depth.value is not None else "",
+            "camera": camera,
+            "rule_depth_margin": round(float(depth.value), 3) if depth is not None and depth.value is not None else "",
             "notes": "CHECK: " + "; ".join(c.message for c in v.checks if c.code in unsure) if unsure else "",
         }
-        for f in FAULTS:
-            row[f] = "" if (f == "depth" and "squat_depth" in unsure) else int(f in faults)
+        for f in FAULT_COLUMNS:
+            checks = [c for c in v.checks if FAULT_OF.get(c.code) == f]
+            if not checks or any(c.code in unsure for c in checks):
+                row[f] = ""                       # not judged for this lift, or a human decides
+            else:
+                row[f] = int(any(c.status == Status.FAIL for c in checks))
         rows.append(row)
     return rows
 
@@ -92,8 +106,11 @@ def bottom_snapshot(video: Path, analysis, rep_index: int, out_path: Path, width
         img = img[y0:int(min(y1, img.shape[0])), x0:int(min(x1, img.shape[1]))]
     scale = width / img.shape[1]
     img = cv2.resize(img, (width, int(img.shape[0] * scale)))
-    depth = next(c for c in v.checks if c.code == "squat_depth")
-    text = f"rep {v.rep + 1}  {depth.status.value}  margin {depth.value:+.2f}"
+    depth = next((c for c in v.checks if c.code == "squat_depth"), None)
+    if depth is not None and depth.value is not None:
+        text = f"rep {v.rep + 1}  {depth.status.value}  margin {depth.value:+.2f}"
+    else:
+        text = f"rep {v.rep + 1}  {v.label}" + ("  (top of the pull)" if v.lift == "deadlift" else "")
     cv2.rectangle(img, (0, 0), (width, 30), (0, 0, 0), -1)
     cv2.putText(img, text, (8, 21), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,6 +128,8 @@ def draft_labels(folder: str | Path, out_csv: str | Path, lift: str = "squat",
     for video in videos:
         res = analyze_pose(_pose_for(video, model=model), lift)
         rows += rep_rows(res, video.stem)
+        if res.view and res.view.kind != "side":
+            print(f"  ! {video.name}: {res.view.message}")
         if snapshots:
             for k in range(len(res.verdicts)):
                 bottom_snapshot(video, res, k, Path(snapshots) / f"{video.stem}_rep{k + 1}.jpg")

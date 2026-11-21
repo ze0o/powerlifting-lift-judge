@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../theme.dart';
 
-/// Depth of the hips (in thigh lengths) over the set. Up = deeper.
-/// Shaded band = borderline zone around the depth line; rep windows are tinted
-/// by their verdict and numbered at the bottom of each rep.
+/// Squat: depth of the hips (thigh lengths) over the set, up = deeper, with the
+/// depth line and its borderline band. Deadlift: bar height above the feet.
+/// Rep windows are tinted by their verdict and numbered at the key moment of
+/// each rep (bottom of the squat, top of the pull).
 class DepthChart extends StatelessWidget {
   final Analysis analysis;
   final double height;
@@ -28,12 +29,14 @@ class _DepthPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (a.timeS.length < 2) return;
+    if (a.timeS.length < 2 || a.values.length != a.timeS.length) return;
     const padL = 6.0, padB = 18.0, padT = 14.0;
     final w = size.width - padL, h = size.height - padB - padT;
     final t0 = a.timeS.first, t1 = a.timeS.last;
-    final lo = math.min(a.depth.reduce(math.min), -1.0);
-    final hi = math.max(a.depth.reduce(math.max), a.creaseOffset + a.borderlineBand) + 0.1;
+    final off = a.creaseOffset, band = a.borderlineBand ?? 0;
+    final vmin = a.values.reduce(math.min), vmax = a.values.reduce(math.max);
+    final lo = off == null ? vmin - 0.1 : math.min(vmin, -1.0);
+    final hi = (off == null ? vmax : math.max(vmax, off + band)) + 0.1;
     double x(double t) => padL + (t - t0) / (t1 - t0) * w;
     double y(double d) => padT + (hi - d) / (hi - lo) * h;
 
@@ -42,20 +45,22 @@ class _DepthPainter extends CustomPainter {
       final c = AppColors.status(r.status).withValues(alpha: 0.10);
       canvas.drawRect(Rect.fromLTRB(x(r.startS), padT, x(r.endS), padT + h), Paint()..color = c);
     }
-    // borderline band + depth line
-    canvas.drawRect(
-      Rect.fromLTRB(padL, y(a.creaseOffset + a.borderlineBand), size.width, y(a.creaseOffset - a.borderlineBand)),
-      Paint()..color = AppColors.borderline.withValues(alpha: 0.15),
-    );
-    canvas.drawLine(Offset(padL, y(a.creaseOffset)), Offset(size.width, y(a.creaseOffset)),
-        Paint()
-          ..color = AppColors.borderline
-          ..strokeWidth = 1);
+    // squat: borderline band + depth line (not drawn for a front view: depth isn't judged there)
+    if (off != null && a.view.kind != 'front') {
+      canvas.drawRect(
+        Rect.fromLTRB(padL, y(off + band), size.width, y(off - band)),
+        Paint()..color = AppColors.borderline.withValues(alpha: 0.15),
+      );
+      canvas.drawLine(Offset(padL, y(off)), Offset(size.width, y(off)),
+          Paint()
+            ..color = AppColors.borderline
+            ..strokeWidth = 1);
+    }
 
-    // depth curve
-    final path = Path()..moveTo(x(a.timeS[0]), y(a.depth[0]));
+    // curve
+    final path = Path()..moveTo(x(a.timeS[0]), y(a.values[0]));
     for (var i = 1; i < a.timeS.length; i++) {
-      path.lineTo(x(a.timeS[i]), y(a.depth[i]));
+      path.lineTo(x(a.timeS[i]), y(a.values[i]));
     }
     canvas.drawPath(
         path,
@@ -74,7 +79,7 @@ class _DepthPainter extends CustomPainter {
             style: TextStyle(color: AppColors.status(r.status), fontSize: 12, fontWeight: FontWeight.w700)),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(x(a.timeS[i]) - tp.width / 2, y(a.depth[i]) - tp.height - 4));
+      tp.paint(canvas, Offset(x(a.timeS[i]) - tp.width / 2, y(a.values[i]) - tp.height - 4));
     }
 
     // time axis

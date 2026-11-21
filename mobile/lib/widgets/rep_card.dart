@@ -64,12 +64,19 @@ class RepCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                _Metric('Descent', fmt('descent_s', 2, 's')),
-                _Metric('Ascent', fmt('ascent_s', 2, 's')),
-                _Metric('Sticking speed', fmt('sticking_speed', 2, ' th/s')),
-                _Metric('Sway', fmt('shoulder_drift', 2, ' th')),
-              ],
+              children: rep.lift == 'deadlift'
+                  ? [
+                      _Metric('Pull', fmt('pull_s', 2, 's')),
+                      _Metric('Lockout knee', fmt('lockout_knee', 0, '°')),
+                      _Metric('Lockout hip', fmt('lockout_hip', 0, '°')),
+                      _Metric('Bar drift', fmt('bar_drift', 2, ' th')),
+                    ]
+                  : [
+                      _Metric('Descent', fmt('descent_s', 2, 's')),
+                      _Metric('Ascent', fmt('ascent_s', 2, 's')),
+                      _Metric('Sticking speed', fmt('sticking_speed', 2, ' th/s')),
+                      _Metric('Sway', fmt('shoulder_drift', 2, ' th')),
+                    ],
             ),
             if (rep.dl != null) ...[
               const SizedBox(height: 12),

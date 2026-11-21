@@ -37,11 +37,16 @@ class JudgeApi {
     }
   }
 
-  Future<Analysis> sample({double? creaseOffset}) async {
-    final r = await _client
-        .get(_uri('/sample', creaseOffset == null ? null : {'crease_offset': '$creaseOffset'}))
-        .timeout(const Duration(seconds: 30));
+  Future<Analysis> sample({String lift = 'squat'}) async {
+    final r = await _client.get(_uri('/sample', {'lift': lift})).timeout(const Duration(seconds: 30));
     return Analysis.fromJson(_decode(r.statusCode, r.body));
+  }
+
+  /// Keeps an analysed upload on the PC in data/raw/<lift>/ so it can be labelled
+  /// and used to improve the model. Returns the saved path (relative to the repo).
+  Future<String> saveForTraining(String jobId) async {
+    final r = await _client.post(_uri('/jobs/$jobId/save')).timeout(const Duration(seconds: 30));
+    return _decode(r.statusCode, r.body)['path'] as String;
   }
 
   /// Uploads a video and waits for the verdict (pose estimation runs on the server).
