@@ -83,7 +83,7 @@ class _AnalyzingScreenState extends State<AnalyzingScreen> {
                     'Splitting the set into reps',
                     'Checking the camera angle',
                     'Checking each rep against the IPF rules',
-                    'Asking the neural network for a second opinion (squat)',
+                    'Asking the neural network for a second opinion',
                   ])
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 5),

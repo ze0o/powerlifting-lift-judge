@@ -107,8 +107,12 @@ and fine-tune the network (notebook 03).
 ## Deep learning: a second opinion that reads the whole rep
 
 The rules check a few hand-picked numbers. A **Keras sequence model** reads the entire rep instead
-(96 frames × 10 signals) and outputs one probability per fault: depth, lockout, bounce, downward
-movement, feet. A rep can have several faults at once, so it's multi-label.
+(96 frames × 10 signals) and outputs one probability per fault. There is **one network per lift**:
+
+| Lift | Key signal | Faults (multi-label) |
+|---|---|---|
+| Squat | hip depth | depth, lockout, bounce, downward movement, feet |
+| Deadlift | bar height (wrists) | lockout, downward movement, hitching, feet |
 
 ```
 rep signals (96×10) ─► Normalization ─► Conv1D ×2 ─► MaxPool ─► Bidirectional GRU ─► Dense ─► 5 × sigmoid
@@ -122,11 +126,16 @@ rep signals (96×10) ─► Normalization ─► Conv1D ×2 ─► MaxPool ─�
 - On synthetic data it **learns the hidden referee depth line from labels alone**: depth F1 0.97 vs 0.91 for
   the fixed-threshold rules; good-lift / no-lift accuracy 99.5% vs 96%. Those are upper bounds until it's
   tested on real lifts.
+- **Deadlift:** on unseen simulated lifters the network tells **hitching** apart from a plain **downward
+  movement**, which the threshold rules mix up (rules F1 0.66 and 0.79 vs 1.00): both are blue cards, so the
+  verdict is right, but the network gives the right *reason*.
 - The rules stay as the explainable verdict. Where the network and the rules disagree is where a human should look.
 
 ```bash
-liftjudge train-dl --out models/rep_fault_net.keras            # ~2 min on a laptop CPU
+liftjudge train-dl --lift squat        # -> models/rep_fault_net.keras           (~2-5 min on a laptop CPU)
+liftjudge train-dl --lift deadlift     # -> models/rep_fault_net_deadlift.keras  (~3-5 min)
 liftjudge analyze squat.mp4 --dl-model models/rep_fault_net.keras
+liftjudge analyze pull.mp4 --lift deadlift --dl-model models/rep_fault_net_deadlift.keras
 ```
 ```
 Rep 1: NO LIFT  [blue card]
@@ -136,7 +145,9 @@ Neural network (second opinion):
 Rep 1: NO LIFT - downward movement on the way up (100%)
 ```
 
-Full walkthrough: [notebooks/03_deep_learning_sequence_model.ipynb](notebooks/03_deep_learning_sequence_model.ipynb).
+Full walkthroughs: [notebooks/03_deep_learning_sequence_model.ipynb](notebooks/03_deep_learning_sequence_model.ipynb) (squat)
+and [notebooks/05_deep_learning_deadlift.ipynb](notebooks/05_deep_learning_deadlift.ipynb) (deadlift).
+The server and the app load whichever networks exist in `models/` and show their opinion for both lifts.
 
 ## Quick start
 
@@ -186,7 +197,8 @@ src/liftjudge/
   rules/           IPF rules per lift (squat, deadlift; bench planned)
   view.py          camera-angle detection (side / angled / front)
   features.py      rep-level feature table for ML / calibration
-  dl.py            Keras sequence model: rep → fault probabilities, synthetic pre-training, fine-tuning
+  dl.py            Keras sequence models (squat + deadlift): rep → fault probabilities, pre-training, fine-tuning
+  devdata.py       development dataset (simulated lifters) for EDA
   render.py        annotated output video (H.264)
   api.py           FastAPI server for the mobile app
   labeling.py      draft labels + bottom-position snapshots for fast human labelling
@@ -198,7 +210,9 @@ mobile/            Flutter app (talks to src/liftjudge/api.py)
 notebooks/
   01_squat_judge_walkthrough.ipynb   problem, approach, signals, rules
   02_calibration_and_ml.ipynb        calibrating the offset + rep classifier
-  03_deep_learning_sequence_model.ipynb   Conv1D + GRU network, rules vs deep learning
+  03_deep_learning_sequence_model.ipynb   squat network: Conv1D + GRU, rules vs deep learning
+  04_lightning_talk_2.ipynb               capstone EDA answers
+  05_deep_learning_deadlift.ipynb         deadlift network
 docs/              rules mapping, roadmap
 tests/             rule and model tests on synthetic lifts
 ```

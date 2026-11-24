@@ -173,7 +173,8 @@ class Analysis {
           .toList(),
       metric: series['metric'] as String? ?? 'depth',
       timeS: nums('time_s'),
-      values: nums('value'),
+      // 'value' since the deadlift update; older servers send the squat curve as 'depth'
+      values: series.containsKey('value') ? nums('value') : nums('depth'),
       creaseOffset: _d(cfg['crease_offset']),
       borderlineBand: _d(cfg['borderline_band']),
       view: CameraView.fromJson(j['view'] as Map<String, dynamic>?),

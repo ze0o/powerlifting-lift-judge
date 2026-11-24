@@ -1,7 +1,8 @@
 """Command line.
 
   liftjudge analyze VIDEO --lift squat --out results/ [--dl-model models/rep_fault_net.keras]
-  liftjudge train-dl --out models/rep_fault_net.keras
+  liftjudge train-dl --lift squat            -> models/rep_fault_net.keras
+  liftjudge train-dl --lift deadlift         -> models/rep_fault_net_deadlift.keras
   liftjudge label data/raw/squat --out data/labels_draft.csv --snapshots data/snapshots
 """
 
@@ -35,13 +36,13 @@ def _analyze(args) -> int:
     with open(out / f"{src.stem}_verdicts.json", "w") as f:
         json.dump([v.to_dict() for v in res.verdicts], f, indent=2)
 
-    if args.dl_model and args.lift == "squat":
-        from .dl import FAULT_TEXT, FAULTS, load_model, predict_faults
+    if args.dl_model:
+        from .dl import LIFT_FAULTS, fault_text, load_model, predict_faults
         probs = predict_faults(load_model(args.dl_model), res)
         probs.to_csv(out / f"{src.stem}_dl_faults.csv", index=False)
         print("\nNeural network (second opinion):")
         for _, r in probs.iterrows():
-            found = [f"{FAULT_TEXT[f]} ({r[f]:.0%})" for f in FAULTS if r[f] >= 0.5]
+            found = [f"{fault_text(args.lift, f)} ({r[f]:.0%})" for f in LIFT_FAULTS[args.lift] if r[f] >= 0.5]
             print(f"Rep {int(r.rep)}: {r.dl_label}" + (f" - {'; '.join(found)}" if found else ""))
 
     if not args.no_video and src.suffix.lower() != ".csv":
@@ -56,20 +57,21 @@ def _train_dl(args) -> int:
     import keras
     from sklearn.model_selection import GroupShuffleSplit
 
-    from .dl import build_model, synthetic_training_set
+    from .dl import DEFAULT_MODEL_PATHS, LIFT_FAULTS, build_model, synthetic_training_set
 
     keras.utils.set_random_seed(args.seed)
-    print(f"Generating {args.reps} synthetic reps...")
-    X, Y, meta = synthetic_training_set(args.reps, seed=args.seed)
+    print(f"Generating {args.reps} simulated {args.lift} reps...")
+    X, Y, meta = synthetic_training_set(args.reps, seed=args.seed, lift=args.lift)
     tr, va = next(GroupShuffleSplit(test_size=0.2, random_state=args.seed).split(X, Y, meta.lifter))
-    model = build_model(X[tr])
+    model = build_model(X[tr], lift=args.lift)
+    print(f"Faults: {', '.join(LIFT_FAULTS[args.lift])}")
     stop = keras.callbacks.EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True)
     hist = model.fit(X[tr], Y[tr], validation_data=(X[va], Y[va]), epochs=args.epochs,
                      batch_size=32, callbacks=[stop], verbose=2 if args.verbose else 0)
     best = min(range(len(hist.history["val_loss"])), key=hist.history["val_loss"].__getitem__)
     print(f"Best epoch {best + 1}: val_loss {hist.history['val_loss'][best]:.3f}, "
           f"val_auc {hist.history['val_auc'][best]:.3f} (unseen simulated lifters)")
-    out = Path(args.out)
+    out = Path(args.out or DEFAULT_MODEL_PATHS[args.lift])
     out.parent.mkdir(parents=True, exist_ok=True)
     model.save(out)
     print(f"Saved {out}")
@@ -101,11 +103,12 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--out", default="results", help="output folder")
     a.add_argument("--no-video", action="store_true", help="skip the annotated video")
     a.add_argument("--crease-offset", type=float, default=SquatConfig.crease_offset)
-    a.add_argument("--dl-model", help="trained rep fault network (.keras) for a second opinion")
+    a.add_argument("--dl-model", help="trained rep fault network (.keras) for the same lift, for a second opinion")
     a.set_defaults(func=_analyze)
 
-    t = sub.add_parser("train-dl", help="pre-train the rep fault network on synthetic squats")
-    t.add_argument("--out", default="models/rep_fault_net.keras")
+    t = sub.add_parser("train-dl", help="pre-train the rep fault network on simulated lifts")
+    t.add_argument("--lift", default="squat", choices=["squat", "deadlift"])
+    t.add_argument("--out", default=None, help="default: models/rep_fault_net[_deadlift].keras")
     t.add_argument("--reps", type=int, default=2000)
     t.add_argument("--epochs", type=int, default=120)
     t.add_argument("--seed", type=int, default=0)

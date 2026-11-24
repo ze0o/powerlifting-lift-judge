@@ -44,7 +44,10 @@ void main() {
       expect(a.reps[1].cards, [RefCard.red]); // soft lockout
       expect(a.reps[2].cards, [RefCard.blue]); // hitch
       expect(a.reps[0].metrics['lockout_knee'], greaterThan(170));
-      expect(a.reps[0].dl, isNull);
+      // the deadlift network's second opinion is included and agrees with the rules
+      expect(a.reps[0].dl!.label, 'GOOD LIFT');
+      expect(a.reps[2].dl!.found, contains('hitching (bar supported on the thighs)'));
+      expect(a.reps.any((r) => r.disagrees), isFalse);
     });
 
     test('network opinion and disagreement', () {
@@ -55,6 +58,16 @@ void main() {
       final j = sampleJson();
       (j['reps'] as List)[0]['dl']['label'] = 'NO LIFT'; // rules say good, network says no
       expect(Analysis.fromJson(j).reps[0].disagrees, isTrue);
+    });
+
+    test('older servers that send the curve as "depth" still draw', () {
+      final j = sampleJson();
+      final series = j['series'] as Map<String, dynamic>;
+      series['depth'] = series.remove('value');
+      series.remove('metric');
+      final a = Analysis.fromJson(j);
+      expect(a.values.length, a.timeS.length);
+      expect(a.metric, 'depth');
     });
 
     test('null metrics (not measurable) are allowed', () {
@@ -114,6 +127,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(saved, isTrue);
       expect(find.textContaining('data/raw/squat/x.mp4'), findsOneWidget);
+    });
+
+    testWidgets('missing curve shows a message, not an empty box', (tester) async {
+      final j = sampleJson();
+      (j['series'] as Map<String, dynamic>)['value'] = <double>[];
+      await tester.pumpWidget(MaterialApp(theme: buildTheme(), home: ResultsScreen(analysis: Analysis.fromJson(j))));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No curve data from the server'), findsOneWidget);
     });
 
     testWidgets('guide screen', (tester) async {

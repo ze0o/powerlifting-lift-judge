@@ -16,11 +16,27 @@ class DepthChart extends StatelessWidget {
   const DepthChart({super.key, required this.analysis, this.height = 170});
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: height,
-        width: double.infinity,
-        child: CustomPaint(painter: _DepthPainter(analysis)),
+  Widget build(BuildContext context) {
+    final a = analysis;
+    if (a.timeS.length < 2 || a.values.length != a.timeS.length) {
+      // never a silent empty box: say why there is no curve
+      return SizedBox(
+        height: 60,
+        child: Center(
+          child: Text(
+            'No curve data from the server. Restart the server so it matches the app version.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted.withValues(alpha: 0.9)),
+          ),
+        ),
       );
+    }
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: CustomPaint(painter: _DepthPainter(a)),
+    );
+  }
 }
 
 class _DepthPainter extends CustomPainter {

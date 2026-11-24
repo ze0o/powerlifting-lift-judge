@@ -79,7 +79,7 @@ def test_deadlift_sample_and_upload(client, monkeypatch, tmp_path):
     body = c.get("/sample", params={"lift": "deadlift"}).json()
     assert [r["label"] for r in body["reps"]] == ["GOOD LIFT", "NO LIFT", "NO LIFT"]
     assert body["series"]["metric"] == "bar_height" and body["config"] == {}
-    assert "dl" not in body["reps"][0]          # the network only knows squats
+    assert ("dl" in body["reps"][0]) == body["dl_available"]   # deadlift network, when trained
 
     r = _upload(c, api, monkeypatch, tmp_path, make_deadlift(hitch=True, seed=4), "deadlift")
     assert r.status_code == 200, r.text

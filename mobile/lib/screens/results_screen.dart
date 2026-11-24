@@ -111,8 +111,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   _SaveBox(saving: _saving, savedPath: _savedPath, onSave: _save),
                   const SizedBox(height: 12),
                 ],
-                if (!a.dlAvailable && a.lift == 'squat')
-                  Text('Neural-network second opinion is off on the server (run `liftjudge train-dl`).',
+                if (!a.dlAvailable)
+                  Text('Neural-network second opinion is off on the server '
+                      '(run `liftjudge train-dl --lift ${a.lift}`).',
                       style: t.bodySmall?.copyWith(color: AppColors.muted)),
                 const SizedBox(height: 8),
                 Text('A training aid, not a replacement for referees.',

@@ -5,7 +5,7 @@
 | 1 | **Squat MVP**: pose extraction, rep splitting, IPF squat rules, annotated video, CLI | ✅ done (rules tested on synthetic data) |
 | 1b | **Real data**: record ~150 labelled squat reps, run the pipeline, measure agreement with human calls | 🔧 labelling tool ready (`liftjudge label`); recording ⏳ |
 | 2 | **Calibration + ML**: calibrate the crease offset; rep classifier (logistic regression, random forest) on rep features | ✅ pipeline done (synthetic) |
-| 2a | **Deep learning**: Keras Conv1D + GRU sequence model, multi-label faults, synthetic pre-training + fine-tuning recipe | ✅ done (synthetic); fine-tune on real reps next |
+| 2a | **Deep learning**: Keras Conv1D + GRU sequence models for squat **and deadlift**, multi-label faults, synthetic pre-training + fine-tuning recipe | ✅ done (simulated); fine-tune on real reps next (MyDeadlift videos for the deadlift) |
 | 2b | **Barbell tracking**: fine-tune YOLO26 to detect plates/bar ends; bar path + velocity | ⏳ |
 | 3 | **Deadlift** (lockout, erect, downward movement, hitching, feet) | ✅ built (synthetic-tested) |
 | 3b | **Bench press** (pause, sinking, butt lift): needs a barbell detector | ⏳ design first |

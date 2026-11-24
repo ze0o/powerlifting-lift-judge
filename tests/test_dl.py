@@ -45,3 +45,41 @@ def test_model_trains_and_predicts(tmp_path):
     assert list(probs.columns) == ["rep", *FAULTS, "dl_label"]
     p = probs[list(FAULTS)].to_numpy()
     assert len(probs) == 2 and ((p >= 0) & (p <= 1)).all()
+
+
+# ---------------------------------------------------------------- deadlift
+def test_deadlift_sequence_uses_bar_signals():
+    from liftjudge.dl import LIFT_CHANNELS
+    from liftjudge.synthetic import make_deadlift
+    res = analyze_pose(make_deadlift(reps=2, seed=3), "deadlift")
+    X = analysis_sequences(res)
+    assert X.shape == (2, N_STEPS, len(LIFT_CHANNELS["deadlift"]))
+    assert np.isfinite(X).all()
+    bar = X[0, :, LIFT_CHANNELS["deadlift"].index("bar_height")]
+    assert bar.max() - bar.min() > 0.3          # the bar goes up and down within the rep
+
+
+def test_deadlift_synthetic_labels():
+    from liftjudge.dl import LIFT_FAULTS
+    X, Y, meta = synthetic_training_set(n_reps=40, n_lifters=8, seed=4, lift="deadlift")
+    assert X.shape[0] == Y.shape[0] == 40
+    assert Y.shape[1] == len(LIFT_FAULTS["deadlift"])
+    hitch, down = LIFT_FAULTS["deadlift"].index("hitching"), LIFT_FAULTS["deadlift"].index("downward")
+    assert not (Y[:, hitch] * Y[:, down]).any()  # a hitch is labelled as a hitch, not also a dip
+
+
+def test_deadlift_model_trains_and_refuses_the_wrong_lift(tmp_path):
+    keras = pytest.importorskip("keras")
+    from liftjudge.dl import LIFT_FAULTS, build_model, load_model, predict_faults
+    from liftjudge.synthetic import make_deadlift
+
+    keras.utils.set_random_seed(0)
+    X, Y, _ = synthetic_training_set(n_reps=60, n_lifters=8, seed=5, lift="deadlift")
+    model = build_model(X, lift="deadlift")
+    assert model.output_shape[-1] == len(LIFT_FAULTS["deadlift"])
+    model.fit(X, Y, epochs=2, batch_size=16, verbose=0)
+    model.save(tmp_path / "dl.keras")
+    probs = predict_faults(load_model(tmp_path / "dl.keras"), analyze_pose(make_deadlift(hitch=True), "deadlift"))
+    assert list(probs.columns) == ["rep", *LIFT_FAULTS["deadlift"], "dl_label"]
+    with pytest.raises(ValueError, match="squat model"):
+        predict_faults(model, analyze_pose(make_squat(), "squat"))   # 4 outputs vs 5 squat faults

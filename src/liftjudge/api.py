@@ -36,7 +36,10 @@ except ImportError as e:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[2]
 JOBS = Path(os.environ.get("LIFTJUDGE_JOBS", Path(tempfile.gettempdir()) / "liftjudge_jobs"))
-DL_PATH = Path(os.environ.get("LIFTJUDGE_DL_MODEL", ROOT / "models" / "rep_fault_net.keras"))
+DL_PATHS = {
+    "squat": Path(os.environ.get("LIFTJUDGE_DL_MODEL", ROOT / "models" / "rep_fault_net.keras")),
+    "deadlift": Path(os.environ.get("LIFTJUDGE_DL_MODEL_DEADLIFT", ROOT / "models" / "rep_fault_net_deadlift.keras")),
+}
 DATA = Path(os.environ.get("LIFTJUDGE_DATA", ROOT / "data" / "raw"))
 MAX_MB = 300
 LIFTS = ("squat", "deadlift")
@@ -45,18 +48,19 @@ app = FastAPI(title="Powerlifting Lift Judge", version=__version__)
 # The Flutter web app runs on another localhost port, so the browser needs CORS.
 # Development server on your own network: any origin is fine. Lock this down if you ever host it.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
-_dl = {"model": None, "tried": False}
+_dl: dict[str, object] = {}
 
 
-def dl_model():
-    if not _dl["tried"]:
-        _dl["tried"] = True
+def dl_model(lift: str = "squat"):
+    """The neural network for this lift, loaded once (None if not trained or no Keras)."""
+    if lift not in _dl:
         try:
             from .dl import load_model
-            _dl["model"] = load_model(DL_PATH) if DL_PATH.exists() else None
+            path = DL_PATHS.get(lift)
+            _dl[lift] = load_model(path) if path is not None and path.exists() else None
         except Exception:
-            _dl["model"] = None
-    return _dl["model"]
+            _dl[lift] = None
+    return _dl[lift]
 
 
 def _series(sig, lift: str, n: int = 300) -> dict:
@@ -91,9 +95,10 @@ def build_response(res, cfg: SquatConfig, video_url: str | None = None) -> dict:
     fps = res.pose.fps
     reps = []
     dl = None
-    model = dl_model() if res.lift == "squat" else None   # the network is trained on squats only
+    model = dl_model(res.lift)               # one network per lift
     if model is not None and res.verdicts:
-        from .dl import FAULT_TEXT, FAULTS, predict_faults
+        from .dl import LIFT_FAULTS, fault_text, predict_faults
+        faults = LIFT_FAULTS[res.lift]
         dl = predict_faults(model, res)
     for v in res.verdicts:
         d = v.to_dict()
@@ -101,8 +106,8 @@ def build_response(res, cfg: SquatConfig, video_url: str | None = None) -> dict:
         if dl is not None:
             r = dl.iloc[v.rep]
             d["dl"] = {"label": r.dl_label,
-                       "faults": {f: round(float(r[f]), 3) for f in FAULTS},
-                       "found": [FAULT_TEXT[f] for f in FAULTS if r[f] >= 0.5]}
+                       "faults": {f: round(float(r[f]), 3) for f in faults},
+                       "found": [fault_text(res.lift, f) for f in faults if r[f] >= 0.5]}
         reps.append(d)
     statuses = [r["status"] for r in reps]
     return _clean({
@@ -122,7 +127,8 @@ def build_response(res, cfg: SquatConfig, video_url: str | None = None) -> dict:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": __version__, "dl_model": dl_model() is not None}
+    models = {lift: dl_model(lift) is not None for lift in LIFTS}
+    return {"status": "ok", "version": __version__, "dl_model": models["squat"], "dl_models": models}
 
 
 @app.get("/sample")

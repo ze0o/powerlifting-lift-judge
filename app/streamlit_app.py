@@ -23,7 +23,8 @@ from liftjudge import analyze_pose  # noqa: E402
 from liftjudge.keypoints import PoseSequence, extract_pose  # noqa: E402
 from liftjudge.rules import SquatConfig, Status  # noqa: E402
 
-DL_MODEL = ROOT / "models" / "rep_fault_net.keras"
+DL_MODELS = {"squat": ROOT / "models" / "rep_fault_net.keras",
+             "deadlift": ROOT / "models" / "rep_fault_net_deadlift.keras"}
 STATUS_ICON = {"pass": "✅", "fail": "❌", "borderline": "⚠️", "unknown": "❔"}
 CARD_ICON = {"red": "🟥", "blue": "🟦", "yellow": "🟨"}
 
@@ -50,10 +51,10 @@ def load_pose(csv_text: str) -> PoseSequence:
 
 
 @st.cache_resource(show_spinner=False)
-def dl_model():
+def dl_model(lift: str):
     try:
         from liftjudge.dl import load_model
-        return load_model(DL_MODEL) if DL_MODEL.exists() else None
+        return load_model(DL_MODELS[lift]) if DL_MODELS[lift].exists() else None
     except Exception:  # Keras or a backend not installed
         return None
 
@@ -78,8 +79,8 @@ with st.sidebar:
                 "Full guide: docs/filming_guide.md")
 
 st.title("🏋️ Powerlifting Lift Judge")
-st.caption("Judges every rep of a squat or deadlift video against the IPF rules and explains the call "
-           "(plus a neural-network second opinion for squats). A training aid, not a replacement for referees.")
+st.caption("Judges every rep of a squat or deadlift video against the IPF rules and explains the call, "
+           "plus a neural-network second opinion. A training aid, not a replacement for referees.")
 
 col_a, col_b = st.columns([3, 1])
 upload = col_a.file_uploader(f"Side-view {lift} video", type=["mp4", "mov", "avi", "m4v", "mkv"])
@@ -127,9 +128,9 @@ m[2].metric("No lifts", sum(s == Status.FAIL for s in statuses))
 m[3].metric("Borderline", sum(s == Status.BORDERLINE for s in statuses))
 
 dl = None
-model = dl_model() if lift == "squat" else None
+model = dl_model(lift)
 if model is not None:
-    from liftjudge.dl import FAULT_TEXT, FAULTS, predict_faults
+    from liftjudge.dl import LIFT_FAULTS, fault_text, predict_faults
     dl = predict_faults(model, res)
 
 left, right = st.columns([1, 1])
@@ -149,7 +150,7 @@ with left:
                            f"hip {met['lockout_hip']:.0f}° · bar drift {met['bar_drift']:.2f} thighs")
             if dl is not None:
                 r = dl.iloc[v.rep]
-                found = [f"{FAULT_TEXT[f]} ({r[f]:.0%})" for f in FAULTS if r[f] >= 0.5]
+                found = [f"{fault_text(lift, f)} ({r[f]:.0%})" for f in LIFT_FAULTS[lift] if r[f] >= 0.5]
                 agree = (r.dl_label == "NO LIFT") == (v.status == Status.FAIL) or v.status == Status.BORDERLINE
                 st.markdown(f"🧠 **Neural network:** {r.dl_label}" + (f": {'; '.join(found)}" if found else "")
                             + ("" if agree else "  \n⚠️ *Disagrees with the rules: worth a human look.*"))
@@ -186,9 +187,9 @@ with right:
     ax.set_xlabel("time (s)"); ax.legend(loc="lower right", fontsize=8)
     st.pyplot(fig, clear_figure=True)
 
-if dl is None and lift == "squat":
-    st.caption("🧠 Neural-network second opinion is off: run `liftjudge train-dl` to create "
-               "models/rep_fault_net.keras (needs Keras).")
+if dl is None:
+    st.caption(f"🧠 Neural-network second opinion is off: run `liftjudge train-dl --lift {lift}` to create "
+               f"{DL_MODELS[lift].relative_to(ROOT)} (needs Keras).")
 
 st.divider()
 d1, d2 = st.columns(2)
